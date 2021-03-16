@@ -1,0 +1,4 @@
+%% encoding: UTF-8
+{application,exchange_rate_server}.
+{modules,[data_handler,exchange_rate_server,exchange_rate_server_app,
+          exchange_rate_server_sup]}.

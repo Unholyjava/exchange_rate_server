@@ -1,0 +1,6 @@
+-sname exchange_rate_server
+
+-setcookie exchange_rate_server_cookie
+
++K true
++A30
