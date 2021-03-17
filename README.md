@@ -37,7 +37,7 @@ http://localhost:8080/api/exchange_rate_server
 
 # example output using command line without XML-output support
 
-$ curl -i -H "Content-Type: text/xml; charset=utf-8" http://http://localhost:8080/api/exchange_rate_server
+$ curl -i -H "Content-Type: text/xml; charset=utf-8" http://localhost:8080/api/exchange_rate_server
 
 HTTP/1.1 200 OK
 content-length: 417

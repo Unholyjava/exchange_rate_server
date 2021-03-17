@@ -13,7 +13,7 @@
 %% API
 -export([start_link/0, init/1, handle_call/3,
   handle_cast/2, handle_info/2, terminate/2,
-  stop/0, insert_rates/1, show_all_rates/0, show_life_status/0]).
+  stop/0, insert_rates/1, show_all_rates/0]).
 
 
 start_link() ->
@@ -24,32 +24,23 @@ init([]) ->
   {ok, #{life_period => 60, life_status => old}}.
 
 insert_rates(Rates) ->
-  gen_server:call(?MODULE, {add, Rates}).
+  gen_server:cast(?MODULE, {add, Rates}).
 
 show_all_rates() ->
   gen_server:call(?MODULE, {read_all}).
 
-show_life_status() ->
-  gen_server:call(?MODULE, {get_life_status}).
-
 stop() ->
   gen_server:call(?MODULE, terminate).
 
-handle_call({add, Rates}, _From, State) ->
-  io:format("Adds ~p into table ~n", [Rates]),
-  list_to_ets(Rates, State),
-  New_State = State#{life_status => new},
-  erlang:start_timer(maps:get(life_period, New_State) * 1000, ?MODULE, data_timeout),
-  {reply, ok, New_State};
-
-handle_call({read_all}, _From, State) ->
-  io:format("Read all table ~n"),
+handle_call({read_all}, _From, #{life_status := new} = State) ->
+  io:format("Output data from etsDB ~n"),
   [Rate_number] = lists:max(ets:match(rate_table, {'_','$1'})),
-  Reply = read_all_data(Rate_number),
+  Reply = {ok, from_ets, read_all_data(Rate_number)},
   {reply, Reply, State};
 
-handle_call({get_life_status}, _From, State) ->
-  Reply = maps:get(life_status, State),
+handle_call({read_all}, _From, #{life_status := old} = State) ->
+  io:format("Output data from PBServer ~n"),
+  Reply = response_PBServer(httpc:request("https://api.privatbank.ua/p24api/pubinfo?json&exchange&coursid=5")),
   {reply, Reply, State};
 
 handle_call(terminate, _From, State) ->
@@ -63,6 +54,13 @@ handle_cast({create_rate_table}, State) ->
   io:format("Create table ~n"),
   ets:new(rate_table, [duplicate_bag, public, named_table, {keypos, 2}]),
   {noreply, State};
+
+handle_cast({add, Rates}, State) ->
+  io:format("Adds ~p into table ~n", [Rates]),
+  list_to_ets(Rates, State),
+  New_State = State#{life_status => new},
+  erlang:start_timer(maps:get(life_period, New_State) * 1000, ?MODULE, data_timeout),
+  {noreply, New_State};
 
 handle_cast(Msg, State) ->
   io:format("Unexpected message in handle_cast ~p~n", [Msg]),
@@ -102,5 +100,10 @@ read_all_data(0, Acc) ->
 read_all_data(Rate_Number, Acc) ->
   read_all_data(Rate_Number - 1, [ets:lookup_element(rate_table, Rate_Number, 1) | Acc]).
 
+response_PBServer({ok, {_Status, _Header, Body}}) ->
+  List_Body = jsx:decode(list_to_binary(Body), [{return_maps, false}]),
+  insert_rates(List_Body),
+  {ok, from_PB, List_Body};
 
-
+response_PBServer({error, Reason}) ->
+  {error, Reason}.
